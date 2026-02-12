@@ -1,0 +1,311 @@
+/**
+ * Defines complete success flow events for each payment type
+ * Based on:
+ * - Production log analysis (Feb 5, 2026 - 477 BQR successes, 3 CARD successes)
+ * - Events Master Excel documentation
+ * - POS codebase event definitions
+ *
+ * NOTE: These are CORE events that happen exactly ONCE per successful transaction.
+ * Polling events (status checks) are handled separately as they occur multiple times.
+ */
+
+const SUCCESS_FLOWS = {
+  /**
+   * BQR (BharatQR) Payment Flow
+   * Based on production data: 477 successful transactions analyzed
+   * Average: 18 events per success (excluding polling duplicates)
+   */
+  BQR: [
+    // Initiation
+    'payment_initiated_upi',
+    'qr_generation_started',
+
+    // QR Generation
+    'WALLET_QR_GENERATE_API_REQUEST',
+    'WALLET_QR_GENERATE_API_RESPONSE_SUCCESS',
+    'qr_api_success',
+
+    // QR Display
+    'BQR_UI_EVENT_BQR_QR_SCREEN_SHOWN',
+
+    // Status Polling (single occurrence - actual count handled separately)
+    'UPI_API_EVENT_REQ_CHECK_STATUS',
+    'PAYMENT_STATUS_API_REQUEST',
+    'UPI_API_EVENT_RESP_CHECK_STATUS',
+    'PAYMENT_STATUS_API_RESPONSE_SUCCESS',
+
+    // Success & Result
+    'Create_TransactionResultActivity',
+    'BQR_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
+
+    // Printing (always attempted in production)
+    'BQR_AUTOMATE_PRINT_CHANRGESLIP',
+    'BQR_print_status_check',
+    'BQR_print_status_check_result',
+    'print_status_check_failed',  // Common in production (printer out of paper)
+    'print_receipt_failed',        // Common in production (printer out of paper)
+  ],
+
+  /**
+   * UPI (Dynamic QR) Payment Flow
+   * Based on Events Master Excel + codebase definitions
+   */
+  UPI: [
+    // Initiation
+    'payment_initiated_upi',
+    'qr_generation_started',
+
+    // QR Generation
+    'UPI_API_EVENT_REQ_PAY_UPI_QR',
+    'UPI_API_EVENT_RESP_PAY_UPI_QR',
+    'qr_api_success',
+
+    // QR Display
+    'UPI_UI_EVENT_UPI_QR_SCREEN_SHOWN',
+
+    // Status Polling
+    'UPI_UI_EVENT_UPI_CHECK_STATUS_PROGRESS_INITIATED',
+    'UPI_API_EVENT_REQ_CHECK_STATUS',
+    'UPI_API_EVENT_RESP_CHECK_STATUS',
+
+    // Payment Authorization
+    'UPI_PAY_AUTHORIZED_PAYMENT_NOTIFICATION',
+    'MQTT_PAYMENT_NOTIFICATION_RECEIVED',
+
+    // Success & Result
+    'UPI_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
+    'AUTOMATE_PRINT_CHANRGESLIP',
+  ],
+
+  /**
+   * CARD Payment Flow
+   * Based on production data: 3 successful transactions analyzed
+   * Average: 23 events per success
+   */
+  CARD: [
+    // Payment Selection
+    'CARD_PAYMENT_SELECTED',
+
+    // Initiation
+    'payment_initiated_card',
+    'Card_UI_EVENT_CARD_TAP_SWIPE_DIP_SCREEN_SHOWN',
+
+    // Transaction Preparation
+    'PREPARING_FOR_TXN',
+    'TXN_IN_PROGRESS',
+
+    // PIN Entry
+    'Card_UI_EVENT_CARD_ENTER_PIN_SCREEN_SHOWN',
+    'Card_APP_EVENT_PIN_ENTERED',
+
+    // Payment API (API 3.0)
+    'CARD_PAYMENT_API_REQUEST',
+    'CARD_PAYMENT_API_EVENT_REQ_API_3.0_PAYMENT_CARD',
+    'CARD_PAYMENT_API_RESPONSE_SUCCESS',
+    'CARD_PAYMENT_API_EVENT_RESP_API_3.0_PAYMENT_CARD',
+
+    // Payment Confirmation (API 2.0)
+    'PAYMENT_CONFIRM_API_REQUEST',
+    'CARD_PAYMENT_API_EVENT_REQ_API_2.0_PAYMENT_CONFIRM',
+    'PAYMENT_CONFIRM_API_RESPONSE_SUCCESS',
+    'CARD_PAYMENT_API_EVENT_RESP_API_2.0_PAYMENT_CONFIRM',
+
+    // Success & Result
+    'Create_TransactionResultActivity',
+    'CARD_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
+
+    // Printing
+    'CARD_AUTOMATE_PRINT_CHANRGESLIP',
+    'CARD_print_status_check',
+    'CARD_print_status_check_result',
+    'print_status_check_failed',
+    'print_receipt_failed',
+  ],
+
+  /**
+   * CASH Payment Flow
+   * Based on Events Master Excel documentation
+   */
+  CASH: [
+    'cash_payment_screen_shown',
+    'cash_payment_initiated',
+    'API_REQUEST',
+    'API_RESPONSE_SUCCESS',
+    'CASH_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
+    'AUTOMATE_PRINT_CHANRGESLIP',
+  ],
+
+  /**
+   * CHEQUE Payment Flow
+   * Based on Events Master Excel documentation
+   */
+  CHEQUE: [
+    'cheque_payment_screen_shown',
+    'cheque_payment_initiated',
+    'cheque_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
+    'AUTOMATE_PRINT_CHANRGESLIP',
+  ],
+
+  /**
+   * DD (Demand Draft) Payment Flow
+   * Based on Events Master Excel documentation
+   */
+  DD: [
+    'dd_payment_screen_shown',
+    'dd_payment_initiated',
+    'API_REQUEST',
+    'API_RESPONSE_SUCCESS',
+    'DD_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
+    'AUTOMATE_PRINT_CHANRGESLIP',
+  ],
+
+  /**
+   * EMI Payment Flow
+   * Based on codebase event definitions
+   */
+  EMI: [
+    'payment_initiated_card',
+    'emi_plan_selection_page_viewed',
+    'emi_plans_api_event_req',
+    'emi_plans_api_event_resp_success',
+    'emi_plan_bank_selected',
+    'emi_tenure_selection_page_viewed',
+    'emi_tenure_option_selected',
+    'emi_proceed_button_tapped',
+    'Card_UI_EVENT_CARD_TAP_SWIPE_DIP_SCREEN_SHOWN',
+    'Card_APP_EVENT_PIN_ENTERED',
+    'emi_validation_api_event_req',
+    'emi_validation_api_event_resp_success',
+    'CARD_PAYMENT_API_EVENT_REQ',
+    'CARD_PAYMENT_API_EVENT_RESP_SUCCESS',
+    'CARD_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
+  ],
+
+  /**
+   * PAYLINK (CNP - Card Not Present) Payment Flow
+   * Based on Events Master Excel documentation
+   */
+  PAYLINK: [
+    'PAYLINK_INPUT_SCREEN_SHOWN',
+    'PAYLINK_SEND_INITIATED',
+    'PAYLINK_SEND_SUCCESS',
+    'PAYLINK_POLL_STATUS_INITIATED',
+    'PAYLINK_PAYMENT_SUCCESS',
+    'CNP_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
+    'AUTOMATE_PRINT_CHANRGESLIP',
+  ],
+
+  /**
+   * CNP (Card Not Present) Payment Flow
+   * Similar to PAYLINK but without print
+   */
+  CNP: [
+    'PAYLINK_INPUT_SCREEN_SHOWN',
+    'PAYLINK_SEND_INITIATED',
+    'PAYLINK_SEND_SUCCESS',
+    'PAYLINK_POLL_STATUS_INITIATED',
+    'PAYLINK_PAYMENT_SUCCESS',
+    'CNP_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
+  ],
+
+  /**
+   * WALLET Payment Flow
+   * Based on Events Master Excel documentation
+   */
+  WALLET: [
+    'qr_generation_started',
+    'qr_api_success',
+    'qr_page_viewed',
+    'UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
+  ],
+
+  /**
+   * NCMC (National Common Mobility Card) Balance Load Flow
+   * Based on Events Master Excel documentation
+   */
+  NCMC: [
+    'NCMC_BALANCE_CHECK_CLICKED',
+    'NCMC_BALANCE_CHECK_SUCCESS',
+    'NCMC_BALANCE_LOAD_CARD_CLICKED',
+    'NCMC_BALANCE_LOAD_CARD_API_EVENT_REQ',
+    'NCMC_BALANCE_LOAD_CARD_API_EVENT_RESP_SUCCESS',
+  ],
+};
+
+/**
+ * Events that occur MULTIPLE times per transaction (polling/retry)
+ * These need special handling in expected event calculations
+ */
+const POLLING_EVENTS = {
+  BQR: [
+    'UPI_API_EVENT_REQ_CHECK_STATUS',
+    'PAYMENT_STATUS_API_REQUEST',
+    'UPI_API_EVENT_RESP_CHECK_STATUS',
+    'PAYMENT_STATUS_API_RESPONSE_SUCCESS',
+    'PAYMENT_STATUS_API_RESPONSE_FAILED',
+  ],
+  UPI: [
+    'UPI_API_EVENT_REQ_CHECK_STATUS',
+    'UPI_API_EVENT_RESP_CHECK_STATUS',
+  ],
+  PAYLINK: [
+    'PAYLINK_POLL_STATUS_INITIATED',
+  ],
+};
+
+/**
+ * Average polling rounds per transaction (from production analysis)
+ * BQR: 1.12 rounds average (min: 1, max: 12)
+ */
+const POLLING_AVERAGES = {
+  BQR: 1.12,
+  UPI: 1.0,
+  PAYLINK: 1.0,
+};
+
+/**
+ * Get typical success flow for a payment type
+ * @param {string} paymentType - Payment type (UPI, CARD, BQR, etc.)
+ * @returns {Array<string>} - Expected event names in a successful flow
+ */
+function getSuccessFlow(paymentType) {
+  return SUCCESS_FLOWS[paymentType] || [];
+}
+
+/**
+ * Get expected event count for a payment type
+ * @param {string} paymentType - Payment type
+ * @returns {number} - Number of events expected in a successful transaction
+ */
+function getExpectedEventCount(paymentType) {
+  const flow = getSuccessFlow(paymentType);
+  return flow.length;
+}
+
+/**
+ * Get polling events for a payment type
+ * @param {string} paymentType - Payment type
+ * @returns {Array<string>} - Events that can occur multiple times
+ */
+function getPollingEvents(paymentType) {
+  return POLLING_EVENTS[paymentType] || [];
+}
+
+/**
+ * Get average polling rounds for a payment type
+ * @param {string} paymentType - Payment type
+ * @returns {number} - Average number of polling rounds
+ */
+function getPollingAverage(paymentType) {
+  return POLLING_AVERAGES[paymentType] || 0;
+}
+
+module.exports = {
+  SUCCESS_FLOWS,
+  POLLING_EVENTS,
+  POLLING_AVERAGES,
+  getSuccessFlow,
+  getExpectedEventCount,
+  getPollingEvents,
+  getPollingAverage,
+};

@@ -1,0 +1,32 @@
+{
+  "name": "event-analyzer",
+  "version": "1.0.0",
+  "description": "Analyze POS event logs for legitimate event drops, excluding user cancellations and payment mode switches",
+  "main": "index.js",
+  "bin": {
+    "event-analyzer": "./index.js"
+  },
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "node index.js tests/sample-drops.csv"
+  },
+  "keywords": [
+    "event-analyzer",
+    "pos",
+    "payment",
+    "drop-detection",
+    "analytics"
+  ],
+  "author": "Razorpay POS Team",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "csv-parser": "^3.2.0",
+    "csv-writer": "^1.6.0",
+    "papaparse": "^5.5.3",
+    "xlsx": "^0.18.5"
+  }
+}
