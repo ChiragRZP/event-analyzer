@@ -17,6 +17,9 @@ async function generateReport(analyses, outputPath) {
     const outcome = a.dropClassification.category;
     const typeMapping = getPaymentTypeMapping(a.paymentType, outcome);
     return {
+      dsn: a.dsn || '',
+      mid: a.mid || '',
+      tid: a.tid || '',
       txn_id: a.txnId,
       event_payment_type: typeMapping.eventType,
       db_payment_type: typeMapping.dbType,
@@ -36,6 +39,9 @@ async function generateReport(analyses, outputPath) {
   const csvWriter = createObjectCsvWriter({
     path: outputPath,
     header: [
+      { id: 'dsn', title: 'DSN' },
+      { id: 'mid', title: 'Merchant ID' },
+      { id: 'tid', title: 'Terminal ID' },
       { id: 'txn_id', title: 'Transaction ID' },
       { id: 'event_payment_type', title: 'Event Payment Type' },
       { id: 'db_payment_type', title: 'Database Payment Type' },
