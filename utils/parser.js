@@ -61,6 +61,10 @@ async function parseEventLog(filePath) {
       if (typeof properties === 'string') {
         try {
           properties = JSON.parse(properties);
+          // Handle double-encoded JSON (properties wrapped in quotes)
+          if (typeof properties === 'string') {
+            properties = JSON.parse(properties);
+          }
         } catch (e) {
           console.warn(`Failed to parse properties for event ${eventName}:`, e.message);
           properties = {};
@@ -165,6 +169,10 @@ async function parseCSVStreaming(filePath) {
           if (typeof properties === 'string') {
             try {
               properties = JSON.parse(properties);
+              // Handle double-encoded JSON (properties wrapped in quotes)
+              if (typeof properties === 'string') {
+                properties = JSON.parse(properties);
+              }
             } catch (e) {
               properties = {};
             }
