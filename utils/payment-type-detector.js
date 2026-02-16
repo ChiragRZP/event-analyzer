@@ -27,13 +27,18 @@ function inferPaymentTypeFromEvents(events) {
   // BQR payment indicators (takes priority over UPI since BQR uses UPI events)
   const bqrIndicators = [
     'BQR_UI_EVENT_BQR_QR_SCREEN_SHOWN',
+    'BHARATQR_QR_SHOWN',  // Alternative event name
     'BQR_PAY_AUTHORIZED_PAYMENT_NOTIFICATION',
     'BQR_AUTOMATE_PRINT_CHANRGESLIP',
     'BQR_print_status_check',
+    'BQR_print_receipt_button_clicked',
+    'BQR_THERMAL_PRINT_START',
     'BQR_API_EVENT_REQ_STOP_PAYMENT',
     'BQR_API_EVENT_RESP_STOP_PAYMENT',
     'BHARATQR_UI_EVENT_TRANSACTION_FAILURE_SCREEN_SHOWN',
-    'WALLET_QR_GENERATE_API',
+    'WALLET_QR_GENERATE_API',  // Matches both REQUEST and RESPONSE_SUCCESS
+    'BQR_API_EVENT_REQ_GENERATE_QR',
+    'BQR_API_EVENT_RESP_GENERATE_QR',
     'BQR_API_EVENT_REQ_PAY_BQR_QR',
     'BQR_API_EVENT_RESP_PAY_BQR_QR',
     'BQR_API_EVENT_REQ_CHECK_STATUS',

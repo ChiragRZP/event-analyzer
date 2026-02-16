@@ -11,6 +11,64 @@ function classifyDrop(flowAnalysis, events) {
     flowAnalysis;
 
   // ========================================
+  // PRIORITY 0: Reprint Sessions (NOT a drop)
+  // ========================================
+  // Detect receipt reprint sessions - these are POST-PAYMENT activities
+  // Characteristics:
+  // 1. Has successful charge slip fetch (fetch_charge_slip_api_response with success=true)
+  // 2. Has txnId in event properties (indicates payment already completed)
+  // 3. No payment initiation events (payment_initiated_*)
+  // 4. Has print-related events (BQR_print_receipt_button_clicked, etc.)
+
+  const hasChargeSlipFetch = events.some(e =>
+    e.eventName === 'fetch_charge_slip_api_response' &&
+    e.properties?.success === true &&
+    e.properties?.txnId  // Has a backend transaction ID
+  );
+
+  const hasPaymentInitiation = events.some(e =>
+    e.eventName === 'payment_initiated_upi' ||
+    e.eventName === 'payment_initiated_card' ||
+    e.eventName === 'payment_initiated_bqr' ||
+    e.eventName === 'cash_payment_initiated' ||
+    e.eventName === 'payment_initiated_cheque' ||
+    e.eventName === 'payment_initiated_dd' ||
+    e.eventName === 'payment_initiated_emi' ||
+    e.eventName === 'payment_initiated_paylink' ||
+    e.eventName === 'payment_initiated_wallet' ||
+    e.eventName === 'payment_initiated_ncmc'
+  );
+
+  const hasPrintEvents =
+    eventNames.has('BQR_print_receipt_button_clicked') ||
+    eventNames.has('UPI_print_receipt_button_clicked') ||
+    eventNames.has('CARD_print_receipt_button_clicked') ||
+    eventNames.has('BQR_THERMAL_PRINT_START') ||
+    eventNames.has('CHARGE_SLIP_RECEIPT_IMAGE_FETCH_API_REQUEST');
+
+  if (hasChargeSlipFetch && !hasPaymentInitiation && hasPrintEvents) {
+    // Extract the backend txnId for reference
+    const chargeSlipEvent = events.find(e =>
+      e.eventName === 'fetch_charge_slip_api_response' &&
+      e.properties?.success === true
+    );
+    const backendTxnId = chargeSlipEvent?.properties?.txnId || 'UNKNOWN';
+
+    return {
+      category: 'REPRINT_SESSION',
+      isLegitimate: false,
+      severity: 'INFO',
+      reason: `Post-payment receipt reprint session (original payment: ${backendTxnId})`,
+      details: {
+        backendTxnId,
+        hasChargeSlipFetch: true,
+        hasPaymentInitiation: false,
+        hasPrintEvents: true,
+      },
+    };
+  }
+
+  // ========================================
   // PRIORITY 1: User Cancellation (NOT a drop)
   // ========================================
 
@@ -31,6 +89,14 @@ function classifyDrop(flowAnalysis, events) {
     eventNames.has('STOP_PAYMENT_API_REQUEST') ||
     eventNames.has('STOP_PAYMENT_API_RESPONSE_FAILED');
 
+  // Check for card PIN abort (user cancelled PIN entry)
+  const hasPinAbort = events.some(e =>
+    e.eventName === 'EMV_ERR_RECEIVED' &&
+    (e.properties?.errorCode === 'PIN_ABORTED' ||
+     e.properties?.error === 'PIN_ABORTED' ||
+     e.properties?.message === 'PIN_ABORTED')
+  );
+
   // Check for navigation events (back/home button presses)
   const hasBackPress = eventNames.has('ON_BACK_PRESSED');
   const hasHomePress = eventNames.has('ON_HOME_PRESSED');
@@ -42,6 +108,7 @@ function classifyDrop(flowAnalysis, events) {
     !hasFailure;     // Not after failure screen
 
   if (eventNames.has('PAYMENT_CANCELLED') ||
+      hasPinAbort ||
       hasUPIStopPayment ||
       hasBQRStopPayment ||
       hasPayLinkStopPayment ||
@@ -50,6 +117,7 @@ function classifyDrop(flowAnalysis, events) {
 
     // Determine which stop payment method was used
     let stopMethod = 'back button';
+    if (hasPinAbort) stopMethod = 'card PIN abort (user cancelled PIN entry)';
     if (hasUPIStopPayment) stopMethod = 'UPI stop payment';
     if (hasBQRStopPayment) stopMethod = 'BQR stop payment';
     if (hasPayLinkStopPayment) stopMethod = 'Paylink stop payment';
@@ -114,23 +182,38 @@ function classifyDrop(flowAnalysis, events) {
   // PRIORITY 4: Failed Payment (NOT a drop)
   // ========================================
   // If payment reached a failure screen, it's a legitimate failure, not a drop
-  if (hasFailure) {
+
+  // Check for session expiry (user was logged out mid-transaction)
+  const hasSessionExpiry = events.some(e =>
+    e.eventName === 'API_SESSION_EXPIRY' ||
+    (e.eventName === 'LOGOUT' && events.some(ev => ev.eventName.includes('_API_RESPONSE_FAILED')))
+  );
+
+  if (hasFailure || hasSessionExpiry) {
     // Find failure indicators that were present
     const failureEvents = events
       .filter(e =>
         e.eventName.includes('FAILURE_SCREEN_SHOWN') ||
         e.eventName.includes('_FAILURE') ||
-        e.eventName.includes('_FAILED')
+        e.eventName.includes('_FAILED') ||
+        e.eventName === 'API_SESSION_EXPIRY' ||
+        e.eventName === 'APP_EXCEPTION'
       )
       .map(e => e.eventName);
+
+    let reason = 'Payment failed and failure screen was shown';
+    if (hasSessionExpiry) {
+      reason = 'Payment failed due to session expiry (user was logged out mid-transaction)';
+    }
 
     return {
       category: 'FAILURE',
       isLegitimate: false,
       severity: 'INFO',
-      reason: 'Payment failed and failure screen was shown',
+      reason,
       details: {
         failureIndicatorsFound: failureEvents,
+        hasSessionExpiry,
       },
     };
   }
