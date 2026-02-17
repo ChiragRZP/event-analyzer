@@ -44,30 +44,81 @@ async function parseEventLog(filePath) {
   // Group events by transaction ID
   const transactionMap = new Map();
 
+  // Detect CSV format (old with full properties JSON vs new with extracted columns)
+  const isOptimizedFormat = rows.length > 0 && ('dsn' in rows[0] || 'payment_type' in rows[0]);
+
+  if (isOptimizedFormat) {
+    console.log('  ✅ Detected optimized CSV format (individual columns)');
+  }
+
   for (const row of rows) {
     try {
       // Extract fields (support multiple column name variations)
-      const txnId = row.txn_id || row.UNIQUE_TRANSACTION_ID || row.transaction_id;
+      let txnId = row.txn_id || row.UNIQUE_TRANSACTION_ID || row.transaction_id;
       const eventName = row.event_name || row.event || row.EVENT_NAME;
       const eventTime = row.event_time || row.EVENT_TIMESTAMP || row.timestamp;
-      let properties = row.properties || row.PROPERTIES || '{}';
+
+      // NEW FORMAT SUPPORT: If txn_id column is missing, extract sequence_id from properties JSON
+      // This supports the new format: event_name,dsn,EVENT_TIMESTAMP,properties
+      if (!txnId && row.properties) {
+        try {
+          let propertiesTemp = typeof row.properties === 'string'
+            ? JSON.parse(row.properties)
+            : row.properties;
+          // Handle double-encoded JSON
+          if (typeof propertiesTemp === 'string') {
+            propertiesTemp = JSON.parse(propertiesTemp);
+          }
+          txnId = propertiesTemp.sequence_id || propertiesTemp.SEQUENCE_ID;
+        } catch (e) {
+          // Failed to extract sequence_id from properties, will skip this row
+        }
+      }
 
       // Skip rows without required fields
       if (!txnId || !eventName) {
         continue;
       }
 
-      // Parse properties if it's a JSON string
-      if (typeof properties === 'string') {
-        try {
-          properties = JSON.parse(properties);
-          // Handle double-encoded JSON (properties wrapped in quotes)
-          if (typeof properties === 'string') {
-            properties = JSON.parse(properties);
+      let properties = {};
+
+      if (isOptimizedFormat) {
+        // NEW FORMAT: Columns are already extracted
+        properties = {
+          dsn: row.dsn,
+          mid: row.mid,
+          tid: row.tid,
+          PAYMENT_TYPE: row.payment_type,
+          amount: row.amount,
+          EVENT_TIME: row.event_timestamp_ms,
+          success: row.success === 'true' || row.success === true,
+          status: row.status,
+          txnId: row.backend_txn_id,
+          errorCode: row.error_code,
+          error: row.error,
+          message: row.message,
+          newSource: row.new_source,
+          appVersionName: row.app_version,
+          web_version: row.web_version,
+          sequence_id: txnId, // Already extracted
+        };
+      } else {
+        // OLD FORMAT: Parse full properties JSON
+        let propertiesRaw = row.properties || row.PROPERTIES || '{}';
+
+        if (typeof propertiesRaw === 'string') {
+          try {
+            properties = JSON.parse(propertiesRaw);
+            // Handle double-encoded JSON (properties wrapped in quotes)
+            if (typeof properties === 'string') {
+              properties = JSON.parse(properties);
+            }
+          } catch (e) {
+            console.warn(`Failed to parse properties for event ${eventName}:`, e.message);
+            properties = {};
           }
-        } catch (e) {
-          console.warn(`Failed to parse properties for event ${eventName}:`, e.message);
-          properties = {};
+        } else {
+          properties = propertiesRaw;
         }
       }
 
@@ -76,7 +127,7 @@ async function parseEventLog(filePath) {
         eventName,
         eventTime,
         properties,
-        sequenceId: properties.sequence_id || properties.SEQUENCE_ID,
+        sequenceId: properties.sequence_id || properties.SEQUENCE_ID || txnId,
         paymentType: properties.PAYMENT_TYPE || properties.payment_type,
         amount: properties.amount || properties.AMOUNT,
       };
@@ -141,11 +192,20 @@ async function parseCSVStreaming(filePath) {
     const transactionMap = new Map();
     let rowCount = 0;
     let lastProgress = 0;
+    let isOptimizedFormat = null; // Will be detected from first row
 
     fs.createReadStream(filePath)
       .pipe(csv())
       .on('data', (row) => {
         rowCount++;
+
+        // Detect format from first row
+        if (isOptimizedFormat === null) {
+          isOptimizedFormat = 'dsn' in row || 'payment_type' in row;
+          if (isOptimizedFormat) {
+            console.log('  ✅ Detected optimized CSV format (individual columns)');
+          }
+        }
 
         // Progress indicator every 50,000 rows
         if (rowCount % 50000 === 0) {
@@ -155,26 +215,69 @@ async function parseCSVStreaming(filePath) {
 
         try {
           // Extract fields (support multiple column name variations)
-          const txnId = row.txn_id || row.UNIQUE_TRANSACTION_ID || row.transaction_id;
+          let txnId = row.txn_id || row.UNIQUE_TRANSACTION_ID || row.transaction_id;
           const eventName = row.event_name || row.event || row.EVENT_NAME;
           const eventTime = row.event_time || row.EVENT_TIMESTAMP || row.timestamp;
-          let properties = row.properties || row.PROPERTIES || '{}';
+
+          // NEW FORMAT SUPPORT: If txn_id column is missing, extract sequence_id from properties JSON
+          if (!txnId && row.properties) {
+            try {
+              let propertiesTemp = typeof row.properties === 'string'
+                ? JSON.parse(row.properties)
+                : row.properties;
+              // Handle double-encoded JSON
+              if (typeof propertiesTemp === 'string') {
+                propertiesTemp = JSON.parse(propertiesTemp);
+              }
+              txnId = propertiesTemp.sequence_id || propertiesTemp.SEQUENCE_ID;
+            } catch (e) {
+              // Failed to extract, will skip this row
+            }
+          }
 
           // Skip rows without required fields
           if (!txnId || !eventName) {
             return;
           }
 
-          // Parse properties if it's a JSON string
-          if (typeof properties === 'string') {
-            try {
-              properties = JSON.parse(properties);
-              // Handle double-encoded JSON (properties wrapped in quotes)
-              if (typeof properties === 'string') {
-                properties = JSON.parse(properties);
+          let properties = {};
+
+          if (isOptimizedFormat) {
+            // NEW FORMAT: Columns are already extracted
+            properties = {
+              dsn: row.dsn,
+              mid: row.mid,
+              tid: row.tid,
+              PAYMENT_TYPE: row.payment_type,
+              amount: row.amount,
+              EVENT_TIME: row.event_timestamp_ms,
+              success: row.success === 'true' || row.success === true,
+              status: row.status,
+              txnId: row.backend_txn_id,
+              errorCode: row.error_code,
+              error: row.error,
+              message: row.message,
+              newSource: row.new_source,
+              appVersionName: row.app_version,
+              web_version: row.web_version,
+              sequence_id: txnId,
+            };
+          } else {
+            // OLD FORMAT: Parse full properties JSON
+            let propertiesRaw = row.properties || row.PROPERTIES || '{}';
+
+            if (typeof propertiesRaw === 'string') {
+              try {
+                properties = JSON.parse(propertiesRaw);
+                // Handle double-encoded JSON (properties wrapped in quotes)
+                if (typeof properties === 'string') {
+                  properties = JSON.parse(properties);
+                }
+              } catch (e) {
+                properties = {};
               }
-            } catch (e) {
-              properties = {};
+            } else {
+              properties = propertiesRaw;
             }
           }
 
@@ -183,7 +286,7 @@ async function parseCSVStreaming(filePath) {
             eventName,
             eventTime,
             properties,
-            sequenceId: properties.sequence_id || properties.SEQUENCE_ID,
+            sequenceId: properties.sequence_id || properties.SEQUENCE_ID || txnId,
             paymentType: properties.PAYMENT_TYPE || properties.payment_type,
             amount: properties.amount || properties.AMOUNT,
           };

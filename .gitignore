@@ -1,4 +1,12 @@
 node_modules/
 *.csv
+*.xlsx
 *.log
 .DS_Store
+reports/
+temp/
+.env
+config.json
+!config.example.json
+!config.session-auth.json
+!scripts/*.json

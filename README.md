@@ -4,14 +4,32 @@ AI-powered analyzer for POS payment event logs that identifies **legitimate even
 
 ## Quick Start
 
+### Option 1: Automated (Fetch from Metabase) ⭐ NEW!
+
 ```bash
-# Install dependencies (already done)
+# Setup (one-time)
+cp config.example.json config.json
+# Edit config.json with your Metabase API key
+
+# Fetch and analyze automatically
+npm run fetch
+
+# Or analyze yesterday's data
+npm run fetch:yesterday
+```
+
+See [METABASE_INTEGRATION.md](./METABASE_INTEGRATION.md) for complete setup guide.
+
+### Option 2: Manual (Upload CSV)
+
+```bash
+# Install dependencies
 npm install
 
 # Run with test data
 npm test
 
-# Run with your own data
+# Run with your own CSV/Excel file
 node index.js /path/to/your/events.csv
 
 # Or specify output path

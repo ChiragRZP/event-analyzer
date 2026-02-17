@@ -228,63 +228,79 @@ function classifyDrop(flowAnalysis, events) {
 
   if (paymentType === 'UPI') {
     // QR Generation Drop
-    if (eventNames.has('QR_GENERATION_STARTED')) {
-      if (eventNames.has('QR_API_FAILURE')) {
+    // Check both generic qr_api_* events and UPI-specific UPI_QR_GENERATE_API_* events
+    const hasQRGenerationStarted = eventNames.has('qr_generation_started') ||
+                                    eventNames.has('UPI_QR_GENERATE_API_REQUEST');
+    const hasQRGenerationFailed = eventNames.has('qr_api_failure') ||
+                                   eventNames.has('UPI_QR_GENERATE_API_RESPONSE_FAILED');
+    const hasQRGenerationSuccess = eventNames.has('qr_api_success') ||
+                                    eventNames.has('UPI_QR_GENERATE_API_RESPONSE_SUCCESS');
+
+    if (hasQRGenerationStarted) {
+      if (hasQRGenerationFailed) {
         return {
           category: 'QR_GENERATION_DROP',
           isLegitimate: true,
           severity: 'HIGH',
-          reason: 'QR generation API call failed',
+          reason: 'UPI QR generation API call failed',
           details: {
-            failedAt: 'QR_API_FAILURE',
+            failedAt: eventNames.has('qr_api_failure') ? 'qr_api_failure' : 'UPI_QR_GENERATE_API_RESPONSE_FAILED',
           },
         };
       }
 
-      if (!eventNames.has('QR_API_SUCCESS')) {
+      if (!hasQRGenerationSuccess) {
         return {
           category: 'QR_GENERATION_DROP',
           isLegitimate: true,
           severity: 'HIGH',
-          reason: 'QR generation started but never received success response',
+          reason: 'UPI QR generation started but never received success response',
           details: {
-            missing: 'QR_API_SUCCESS',
+            missing: 'qr_api_success or UPI_QR_GENERATE_API_RESPONSE_SUCCESS',
           },
         };
       }
     }
 
     // QR Display Drop
-    if (eventNames.has('QR_API_SUCCESS') && !eventNames.has('UPI_QR_SHOWN')) {
+    const hasUPIQRShown = eventNames.has('UPI_QR_SHOWN') ||
+                          eventNames.has('UPI_UI_EVENT_UPI_QR_SCREEN_SHOWN');
+
+    if (hasQRGenerationSuccess && !hasUPIQRShown) {
       return {
         category: 'QR_DISPLAY_DROP',
         isLegitimate: true,
         severity: 'HIGH',
-        reason: 'QR generated successfully but never displayed to user',
+        reason: 'UPI QR generated successfully but never displayed to user',
         details: {
-          missing: 'UPI_QR_SHOWN',
+          missing: 'UPI_QR_SHOWN or UPI_UI_EVENT_UPI_QR_SCREEN_SHOWN',
         },
       };
     }
 
     // Status Polling Drop
-    if (eventNames.has('UPI_QR_SHOWN')) {
-      const hasStatusResponse = eventNames.has('UPI_API_RESP_CHECK_STATUS');
+    if (hasUPIQRShown) {
+      const hasStatusResponse = eventNames.has('UPI_API_EVENT_RESP_CHECK_STATUS') ||
+                                 eventNames.has('UPI_API_RESP_CHECK_STATUS') ||
+                                 eventNames.has('PAYMENT_STATUS_API_RESPONSE_SUCCESS');
 
       if (!hasStatusResponse) {
         return {
           category: 'STATUS_POLLING_DROP',
           isLegitimate: true,
           severity: 'HIGH',
-          reason: 'QR shown but status polling never started or received no response',
+          reason: 'UPI QR shown but status polling never started or received no response',
           details: {
-            missing: 'UPI_API_RESP_CHECK_STATUS',
+            missing: 'UPI_API_EVENT_RESP_CHECK_STATUS or PAYMENT_STATUS_API_RESPONSE_SUCCESS',
           },
         };
       }
 
       // Check if status polling returned failure
-      const statusEvents = events.filter(e => e.eventName === 'UPI_API_RESP_CHECK_STATUS');
+      const statusEvents = events.filter(e =>
+        e.eventName === 'UPI_API_EVENT_RESP_CHECK_STATUS' ||
+        e.eventName === 'UPI_API_RESP_CHECK_STATUS'
+      );
       const failedStatus = statusEvents.find(e => e.properties?.status === 'FAILED');
 
       if (failedStatus) {
@@ -292,7 +308,7 @@ function classifyDrop(flowAnalysis, events) {
           category: 'STATUS_POLLING_DROP',
           isLegitimate: true,
           severity: 'HIGH',
-          reason: 'Status polling returned FAILED status',
+          reason: 'UPI status polling returned FAILED status',
           details: {
             failureReason: failedStatus.properties?.errorMessage || 'Unknown',
           },
@@ -302,7 +318,7 @@ function classifyDrop(flowAnalysis, events) {
 
     // Authorization Drop (CRITICAL)
     if (
-      eventNames.has('UPI_QR_SHOWN') &&
+      hasUPIQRShown &&
       !eventNames.has('UPI_PAY_AUTHORIZED_PAYMENT_NOTIFICATION')
     ) {
       // Check if timeout occurred
@@ -339,37 +355,48 @@ function classifyDrop(flowAnalysis, events) {
 
   if (paymentType === 'BQR') {
     // QR Generation Drop
-    if (eventNames.has('payment_initiated_upi')) {
-      if (eventNames.has('WALLET_QR_GENERATE_API_RESPONSE_FAILED')) {
+    // Check both WALLET_QR_GENERATE and BQR_GENERATE events
+    const hasBQRGenerationStarted = eventNames.has('payment_initiated_upi') ||
+                                     eventNames.has('BQR_GENERATE_API_REQUEST') ||
+                                     eventNames.has('WALLET_QR_GENERATE_API_REQUEST');
+    const hasBQRGenerationFailed = eventNames.has('WALLET_QR_GENERATE_API_RESPONSE_FAILED') ||
+                                    eventNames.has('BQR_GENERATE_API_RESPONSE_FAILED');
+    const hasBQRGenerationSuccess = eventNames.has('WALLET_QR_GENERATE_API_RESPONSE_SUCCESS') ||
+                                     eventNames.has('BQR_GENERATE_API_RESPONSE_SUCCESS') ||
+                                     eventNames.has('qr_api_success');
+
+    if (hasBQRGenerationStarted) {
+      if (hasBQRGenerationFailed) {
         return {
           category: 'QR_GENERATION_DROP',
           isLegitimate: true,
           severity: 'HIGH',
           reason: 'BQR QR generation API call failed',
           details: {
-            failedAt: 'WALLET_QR_GENERATE_API_RESPONSE_FAILED',
+            failedAt: eventNames.has('WALLET_QR_GENERATE_API_RESPONSE_FAILED')
+              ? 'WALLET_QR_GENERATE_API_RESPONSE_FAILED'
+              : 'BQR_GENERATE_API_RESPONSE_FAILED',
           },
         };
       }
 
-      if (!eventNames.has('WALLET_QR_GENERATE_API_RESPONSE_SUCCESS')) {
+      if (!hasBQRGenerationSuccess) {
         return {
           category: 'QR_GENERATION_DROP',
           isLegitimate: true,
           severity: 'HIGH',
           reason: 'BQR QR generation started but never received success response',
           details: {
-            missing: 'WALLET_QR_GENERATE_API_RESPONSE_SUCCESS',
+            missing: 'WALLET_QR_GENERATE_API_RESPONSE_SUCCESS or BQR_GENERATE_API_RESPONSE_SUCCESS',
           },
         };
       }
     }
 
     // QR Display Drop
-    if (
-      eventNames.has('WALLET_QR_GENERATE_API_RESPONSE_SUCCESS') &&
-      !eventNames.has('BQR_UI_EVENT_BQR_QR_SCREEN_SHOWN')
-    ) {
+    const hasBQRQRShown = eventNames.has('BQR_UI_EVENT_BQR_QR_SCREEN_SHOWN');
+
+    if (hasBQRGenerationSuccess && !hasBQRQRShown) {
       return {
         category: 'QR_DISPLAY_DROP',
         isLegitimate: true,
@@ -382,8 +409,10 @@ function classifyDrop(flowAnalysis, events) {
     }
 
     // Status Polling Drop
-    if (eventNames.has('BQR_UI_EVENT_BQR_QR_SCREEN_SHOWN')) {
-      const hasStatusResponse = eventNames.has('UPI_API_EVENT_RESP_CHECK_STATUS');
+    if (hasBQRQRShown) {
+      const hasStatusResponse = eventNames.has('UPI_API_EVENT_RESP_CHECK_STATUS') ||
+                                 eventNames.has('UPI_API_RESP_CHECK_STATUS') ||
+                                 eventNames.has('PAYMENT_STATUS_API_RESPONSE_SUCCESS');
 
       if (!hasStatusResponse) {
         return {
@@ -392,13 +421,16 @@ function classifyDrop(flowAnalysis, events) {
           severity: 'HIGH',
           reason: 'BQR QR shown but status polling never started or received no response',
           details: {
-            missing: 'UPI_API_EVENT_RESP_CHECK_STATUS',
+            missing: 'UPI_API_EVENT_RESP_CHECK_STATUS or PAYMENT_STATUS_API_RESPONSE_SUCCESS',
           },
         };
       }
 
       // Check if status polling returned failure
-      const statusEvents = events.filter(e => e.eventName === 'UPI_API_EVENT_RESP_CHECK_STATUS');
+      const statusEvents = events.filter(e =>
+        e.eventName === 'UPI_API_EVENT_RESP_CHECK_STATUS' ||
+        e.eventName === 'UPI_API_RESP_CHECK_STATUS'
+      );
       const failedStatus = statusEvents.find(e => e.properties?.status === 'FAILED');
 
       if (failedStatus) {

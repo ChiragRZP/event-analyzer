@@ -11,7 +11,10 @@
   },
   "scripts": {
     "start": "node index.js",
-    "test": "node index.js tests/sample-drops.csv"
+    "test": "node index.js tests/sample-drops.csv",
+    "fetch": "node fetch-and-analyze.js",
+    "fetch:yesterday": "node fetch-and-analyze.js --date $(date -v-1d +%Y-%m-%d)",
+    "fetch:today": "node fetch-and-analyze.js --date $(date +%Y-%m-%d)"
   },
   "keywords": [
     "event-analyzer",
