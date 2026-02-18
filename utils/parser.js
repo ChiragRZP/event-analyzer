@@ -128,7 +128,7 @@ async function parseEventLog(filePath) {
         eventTime,
         properties,
         sequenceId: properties.sequence_id || properties.SEQUENCE_ID || txnId,
-        paymentType: properties.PAYMENT_TYPE || properties.payment_type,
+        paymentType: properties.PAYMENT_TYPE || properties.payment_type || properties.paymentMode,
         amount: properties.amount || properties.AMOUNT,
       };
 
@@ -287,7 +287,7 @@ async function parseCSVStreaming(filePath) {
             eventTime,
             properties,
             sequenceId: properties.sequence_id || properties.SEQUENCE_ID || txnId,
-            paymentType: properties.PAYMENT_TYPE || properties.payment_type,
+            paymentType: properties.PAYMENT_TYPE || properties.payment_type || properties.paymentMode,
             amount: properties.amount || properties.AMOUNT,
           };
 

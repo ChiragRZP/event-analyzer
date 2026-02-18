@@ -101,6 +101,9 @@ function classifyDrop(flowAnalysis, events) {
   const hasBackPress = eventNames.has('ON_BACK_PRESSED');
   const hasHomePress = eventNames.has('ON_HOME_PRESSED');
 
+  // Check for P2P (peer-to-peer) payment cancellation
+  const hasP2PCancellation = eventNames.has('EMIT_MQTT_P2P_CANCELLATION');
+
   // Navigation during payment (NOT after success/failure) = user cancellation
   // If user presses back/home AFTER success or failure screen, it's just dismissal (not cancellation)
   const isEarlyCancellation = (hasBackPress || hasHomePress) &&
@@ -113,6 +116,7 @@ function classifyDrop(flowAnalysis, events) {
       hasBQRStopPayment ||
       hasPayLinkStopPayment ||
       hasGenericStopPayment ||
+      hasP2PCancellation ||
       isEarlyCancellation) {
 
     // Determine which stop payment method was used
@@ -121,6 +125,7 @@ function classifyDrop(flowAnalysis, events) {
     if (hasUPIStopPayment) stopMethod = 'UPI stop payment';
     if (hasBQRStopPayment) stopMethod = 'BQR stop payment';
     if (hasPayLinkStopPayment) stopMethod = 'Paylink stop payment';
+    if (hasP2PCancellation) stopMethod = 'P2P payment cancellation';
     if (hasBackPress && isEarlyCancellation) stopMethod = 'back button (navigation)';
     if (hasHomePress && isEarlyCancellation) stopMethod = 'home button (navigation)';
 
@@ -135,6 +140,7 @@ function classifyDrop(flowAnalysis, events) {
         hasBQRStopPayment,
         hasPayLinkStopPayment,
         hasGenericStopPayment,
+        hasP2PCancellation,
         hasBackPress,
         hasHomePress,
         isEarlyCancellation,
@@ -481,10 +487,40 @@ function classifyDrop(flowAnalysis, events) {
       };
     }
 
+    // Backend payment succeeded but success screen never shown to user
+    const hasBackendSuccess =
+      eventNames.has('CARD_PAYMENT_API_RESPONSE_SUCCESS') ||
+      eventNames.has('PAYMENT_CONFIRM_API_RESPONSE_SUCCESS') ||
+      eventNames.has('PRE_AUTH_API_RESPONSE_SUCCESS') ||
+      events.some(e => e.eventName.includes('CARD_PAYMENT_API') && e.eventName.includes('RESPONSE_SUCCESS'));
+
+    const hasSuccessScreen =
+      eventNames.has('CARD_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN') ||
+      eventNames.has('CARD_TRANSACTION_SUCCESS_SCREEN_SHOWN') ||
+      eventNames.has('PRE_AUTH_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN');
+
+    if (hasBackendSuccess && !hasSuccessScreen) {
+      const missingScreen = eventNames.has('PRE_AUTH_API_RESPONSE_SUCCESS')
+        ? 'PRE_AUTH_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN'
+        : 'CARD_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN';
+
+      return {
+        category: 'CARD_SUCCESS_SCREEN_DROP',
+        isLegitimate: true,
+        severity: 'HIGH',
+        reason: 'Payment succeeded on backend but success screen was never shown to user',
+        details: {
+          hasBackendSuccess: true,
+          missing: missingScreen,
+        },
+      };
+    }
+
     // PIN entered but API call never made
     if (
       eventNames.has('Card_APP_EVENT_PIN_ENTERED') &&
-      !eventNames.has('CARD_PAYMENT_API_EVENT_REQ')
+      !eventNames.has('CARD_PAYMENT_API_EVENT_REQ') &&
+      !events.some(e => e.eventName.includes('CARD_PAYMENT_API_EVENT_REQ'))
     ) {
       return {
         category: 'CARD_API_DROP',

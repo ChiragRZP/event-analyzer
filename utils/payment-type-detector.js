@@ -12,7 +12,7 @@ function inferPaymentTypeFromEvents(events) {
   const eventNames = events.map(e => e.eventName);
   const eventNamesStr = eventNames.join('|');
 
-  // Card payment indicators
+  // Card payment indicators (includes pre-auth)
   const cardIndicators = [
     'payment_initiated_card',
     'Card_UI_EVENT_CARD_TAP_SWIPE_DIP_SCREEN_SHOWN',
@@ -23,6 +23,14 @@ function inferPaymentTypeFromEvents(events) {
     'CARD_UI_EVENT_TRANSACTION_FAILURE_SCREEN_SHOWN',
     'CARD_PAYMENT_SELECTED',
     'CARD_PAYMENT_EVENT_LISTENED',
+    // Pre-auth events (variant of card payment)
+    'PRE_AUTH_API_REQUEST',
+    'PRE_AUTH_API_RESPONSE_SUCCESS',
+    'PRE_AUTH_API_RESPONSE_FAILED',
+    'PRE_AUTH_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
+    'PRE_AUTH_UI_EVENT_TRANSACTION_FAILURE_SCREEN_SHOWN',
+    'CARD_PAYMENT_API_EVENT_REQ_API_3.0_PAYMENT_PREAUTH',
+    'CARD_PAYMENT_API_EVENT_RESP_API_3.0_PAYMENT_PREAUTH',
   ];
 
   // BQR payment indicators (takes priority over UPI since BQR uses UPI events)
@@ -117,12 +125,16 @@ function inferPaymentTypeFromEvents(events) {
     'PAYLINK_SEND_SUCCESS',
     'PAYLINK_SEND_FAILED',
     'PAYLINK_PAYMENT_SUCCESS',
+    'PAYLINK_PAYMENT_FAILED',
     'PAYLINK_PAYMENT_EXPIRED',
     'PAYLINK_PAYMENT_ABORTED',
     'PAYLINK_CREATE_API_REQUEST',
     'PAYLINK_CREATE_API_RESPONSE_SUCCESS',
     'PAYLINK_CREATE_API_RESPONSE_FAILED',
     'PAYLINK_POLL_STATUS_INITIATED',
+    'PAYLINK_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
+    'PAYLINK_UI_EVENT_TRANSACTION_FAILURE_SCREEN_SHOWN',
+    'CNP_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
   ];
 
   // Wallet indicators
@@ -138,7 +150,13 @@ function inferPaymentTypeFromEvents(events) {
     'NCMC_BALANCE_LOAD',
   ];
 
-  // Check in priority order (BQR before UPI since BQR uses UPI events)
+  // Check in priority order
+  // PAYLINK before UPI/BQR since PAYLINK also uses payment status events
+  if (paylinkIndicators.some(indicator => eventNamesStr.includes(indicator))) {
+    return 'PAYLINK';
+  }
+
+  // BQR before UPI since BQR uses UPI events
   if (bqrIndicators.some(indicator => eventNamesStr.includes(indicator))) {
     return 'BQR';
   }
@@ -165,10 +183,6 @@ function inferPaymentTypeFromEvents(events) {
 
   if (emiIndicators.some(indicator => eventNamesStr.includes(indicator))) {
     return 'EMI';
-  }
-
-  if (paylinkIndicators.some(indicator => eventNamesStr.includes(indicator))) {
-    return 'PAYLINK';
   }
 
   if (walletIndicators.some(indicator => eventNamesStr.includes(indicator))) {
