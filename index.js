@@ -51,7 +51,20 @@ async function analyzeMultiDeviceLog(inputFilePath, outputFilePath) {
 
       const deviceAnalyses = [];
 
-      for (const [txnId, events] of deviceTransactionMap.entries()) {
+      // Build timeline: sort transactions by first event timestamp
+      const txnTimeline = Array.from(deviceTransactionMap.entries()).map(([txnId, events]) => {
+        const timestamps = events
+          .map(e => parseInt(e.properties?.EVENT_TIME))
+          .filter(t => !isNaN(t));
+        const firstEventTime = timestamps.length > 0 ? Math.min(...timestamps) : 0;
+        const lastEventTime = timestamps.length > 0 ? Math.max(...timestamps) : 0;
+        return { txnId, events, firstEventTime, lastEventTime };
+      }).sort((a, b) => a.firstEventTime - b.firstEventTime);
+
+      // Analyze each transaction with context about the next sequence
+      for (let i = 0; i < txnTimeline.length; i++) {
+        const { txnId, events, lastEventTime } = txnTimeline[i];
+
         // Determine payment type
         let paymentType = events.find(e => e.paymentType)?.paymentType;
         if (!paymentType) {
@@ -61,9 +74,24 @@ async function analyzeMultiDeviceLog(inputFilePath, outputFilePath) {
           paymentType = 'UNKNOWN';
         }
 
+        // Build next sequence context (within 15 second window)
+        let nextSequenceContext = null;
+        if (i < txnTimeline.length - 1) {
+          const nextSeq = txnTimeline[i + 1];
+          const timeDiffMs = nextSeq.firstEventTime - lastEventTime;
+
+          if (timeDiffMs > 0 && timeDiffMs <= 15000) {
+            nextSequenceContext = {
+              sequenceId: nextSeq.txnId,
+              timeDiffMs,
+              events: nextSeq.events,
+            };
+          }
+        }
+
         // Analyze flow
         const flowAnalysis = analyzeFlow(events, paymentType);
-        const dropClassification = classifyDrop(flowAnalysis, events);
+        const dropClassification = classifyDrop(flowAnalysis, events, nextSequenceContext);
         const duration = calculateDuration(events);
 
         // Extract device metadata
@@ -182,10 +210,22 @@ async function analyzeEventLog(inputFilePath, outputFilePath) {
 
     console.log('\n🔬 Analyzing payment flows...\n');
 
-    // Analyze each transaction
+    // Build timeline: sort transactions by first event timestamp
+    const txnTimeline = Array.from(transactionMap.entries()).map(([txnId, events]) => {
+      const timestamps = events
+        .map(e => parseInt(e.properties?.EVENT_TIME))
+        .filter(t => !isNaN(t));
+      const firstEventTime = timestamps.length > 0 ? Math.min(...timestamps) : 0;
+      const lastEventTime = timestamps.length > 0 ? Math.max(...timestamps) : 0;
+      return { txnId, events, firstEventTime, lastEventTime };
+    }).sort((a, b) => a.firstEventTime - b.firstEventTime);
+
+    // Analyze each transaction with context about the next sequence
     const analyses = [];
 
-    for (const [txnId, events] of transactionMap.entries()) {
+    for (let i = 0; i < txnTimeline.length; i++) {
+      const { txnId, events, lastEventTime } = txnTimeline[i];
+
       // Determine payment type
       // First try to get from event properties
       let paymentType = events.find(e => e.paymentType)?.paymentType;
@@ -200,11 +240,26 @@ async function analyzeEventLog(inputFilePath, outputFilePath) {
         paymentType = 'UNKNOWN';
       }
 
+      // Build next sequence context (within 15 second window)
+      let nextSequenceContext = null;
+      if (i < txnTimeline.length - 1) {
+        const nextSeq = txnTimeline[i + 1];
+        const timeDiffMs = nextSeq.firstEventTime - lastEventTime;
+
+        if (timeDiffMs > 0 && timeDiffMs <= 15000) {
+          nextSequenceContext = {
+            sequenceId: nextSeq.txnId,
+            timeDiffMs,
+            events: nextSeq.events,
+          };
+        }
+      }
+
       // Analyze flow
       const flowAnalysis = analyzeFlow(events, paymentType);
 
       // Classify drop
-      const dropClassification = classifyDrop(flowAnalysis, events);
+      const dropClassification = classifyDrop(flowAnalysis, events, nextSequenceContext);
 
       // Calculate duration
       const duration = calculateDuration(events);

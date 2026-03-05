@@ -9,8 +9,14 @@ const { getPaymentTypeMapping } = require('./payment-type-mapper');
  * @returns {Promise<Object>} - Report metadata
  */
 async function generateReport(analyses, outputPath) {
-  // Filter to only legitimate drops
-  const legitimateDrops = analyses.filter(a => a.dropClassification.isLegitimate);
+  // Filter to only legitimate drops (excluding user errors and unknown patterns)
+  const legitimateDrops = analyses.filter(a =>
+    a.dropClassification.isLegitimate &&
+    a.dropClassification.category !== 'UNKNOWN_DROP' &&
+    a.dropClassification.category !== 'QR_GENERATION_DROP' &&
+    a.dropClassification.category !== 'QR_DISPLAY_DROP' &&
+    a.dropClassification.category !== 'CARD_PIN_DROP'
+  );
 
   // Prepare CSV records
   const records = legitimateDrops.map(a => {
@@ -207,7 +213,11 @@ function printSummary(reportMetadata, eventStats) {
 
   console.log('\n--- Legitimate Drops by Category ---');
   const categoryCounts = Object.entries(summary.byCategory)
-    .filter(([cat]) => !['USER_CANCELLATION', 'MODE_SWITCH', 'SUCCESS', 'NO_ISSUE'].includes(cat))
+    .filter(([cat]) => !['USER_CANCELLATION', 'MODE_SWITCH', 'SUCCESS', 'NO_ISSUE', 'UNKNOWN_DROP',
+                         'REPRINT_SESSION', 'STATUS_CHECK_SESSION', 'ORPHANED_STATUS_POLLING',
+                         'PRINT_AND_NAVIGATE_SESSION', 'MQTT_P2P_SESSION', 'SDK_SESSION',
+                         'CROSS_SEQUENCE_USER_CANCELLATION', 'CROSS_SEQUENCE_MODE_SWITCH',
+                         'QR_GENERATION_DROP', 'QR_DISPLAY_DROP', 'CARD_PIN_DROP'].includes(cat))
     .sort((a, b) => b[1] - a[1]);
 
   for (const [category, count] of categoryCounts) {

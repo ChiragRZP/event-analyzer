@@ -34,6 +34,9 @@ node index.js /path/to/your/events.csv
 
 # Or specify output path
 node index.js /path/to/events.csv /path/to/output_report.csv
+
+# For large files (increase memory limit)
+node --max-old-space-size=4096 index.js /path/to/events.csv
 ```
 
 ## What It Does
@@ -70,9 +73,22 @@ node index.js /path/to/events.csv /path/to/output_report.csv
 
 ### ❌ Excludes User Actions
 
-- **User Cancellations**: Back button pressed
+The analyzer intelligently filters out user-initiated actions, including:
+
+- **User Cancellations**: Back button, home button, or explicit cancellation
 - **Payment Mode Switches**: User changed payment method
+- **Cross-Sequence User Actions** ⭐ NEW!: User actions that occur in a different sequence ID but happen immediately after (within 15 seconds)
+  - Example: User presses home button which generates a new sequence ID, but happens 7 seconds after the previous payment flow
+  - Example: User switches payment mode which creates a new sequence, but clearly indicates intentional cancellation
 - **Successful Payments**: Completed successfully
+- **Non-Payment Communication Sessions** ⭐ NEW!:
+  - **SDK Sessions** ⭐ NEW!: SDK input/output callbacks when POS app is used as SDK by another application (not direct payment attempts)
+  - **MQTT P2P Sessions** ⭐ NEW!: Peer-to-peer payment communication/synchronization between devices via MQTT (not actual payment attempts on this device)
+- **Post-Payment Sessions** ⭐ NEW!: Navigation and status checks after completed payments
+  - **Reprint Sessions**: Post-payment receipt reprints (not actual payment attempts)
+  - **Print and Navigate Sessions** ⭐ NEW!: Printing receipt then navigating to start new payment (not a payment attempt)
+  - **Status Check Sessions**: Status checks of already authorized/completed payments followed by navigation to start a new payment
+  - **Orphaned Status Polling** ⭐ NEW!: Status polling fragments without actual payment flow (often from app crashes, background polling, or checking external payments)
 
 ## Input Format
 
