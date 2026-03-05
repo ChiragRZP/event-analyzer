@@ -86,7 +86,14 @@ function calculateEventStatistics(analyses) {
     // Categorize the transaction outcome
     const category = dropClassification.category;
 
-    if (category === 'SUCCESS') {
+    if (category === 'REPRINT_SESSION' || category === 'STATUS_CHECK_SESSION' ||
+        category === 'ORPHANED_STATUS_POLLING' || category === 'PRINT_AND_NAVIGATE_SESSION' ||
+        category === 'MQTT_P2P_SESSION' || category === 'SDK_SESSION' || category === 'UNKNOWN_DROP' ||
+        category === 'QR_GENERATION_DROP' || category === 'QR_DISPLAY_DROP' || category === 'CARD_PIN_DROP') {
+      // These are post-payment sessions, SDK callbacks, MQTT communication, orphaned fragments, unknown patterns, or user errors
+      // Not actual payment attempts - skip counting them in payment outcome categories
+      // Don't process further
+    } else if (category === 'SUCCESS') {
       typeStats.successCount++;
       // Even successful transactions might have fewer events than expected
       // (optional events not triggered), so count them as "optional not needed"
@@ -97,11 +104,11 @@ function calculateEventStatistics(analyses) {
     } else if (category === 'FAILURE') {
       typeStats.failureCount++;
       // Failures are expected to have fewer events, don't count as missing
-    } else if (category === 'USER_CANCELLATION') {
+    } else if (category === 'USER_CANCELLATION' || category === 'CROSS_SEQUENCE_USER_CANCELLATION') {
       typeStats.userCancellationCount++;
       typeStats.missingDueToUserCancellation += missingEventCount;
       stats.missingEventsSummary.dueToUserCancellation += missingEventCount;
-    } else if (category === 'MODE_SWITCH') {
+    } else if (category === 'MODE_SWITCH' || category === 'CROSS_SEQUENCE_MODE_SWITCH') {
       typeStats.modeSwitchCount++;
       // Mode switches are user-initiated, count similarly to cancellations
       typeStats.missingDueToUserCancellation += missingEventCount;

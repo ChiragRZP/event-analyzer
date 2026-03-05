@@ -12,7 +12,7 @@ function inferPaymentTypeFromEvents(events) {
   const eventNames = events.map(e => e.eventName);
   const eventNamesStr = eventNames.join('|');
 
-  // Card payment indicators
+  // Card payment indicators (includes pre-auth)
   const cardIndicators = [
     'payment_initiated_card',
     'Card_UI_EVENT_CARD_TAP_SWIPE_DIP_SCREEN_SHOWN',
@@ -22,18 +22,38 @@ function inferPaymentTypeFromEvents(events) {
     'CARD_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
     'CARD_UI_EVENT_TRANSACTION_FAILURE_SCREEN_SHOWN',
     'CARD_PAYMENT_SELECTED',
+    'CARD_PAYMENT_EVENT_LISTENED',
+    // Pre-auth events (variant of card payment)
+    'PRE_AUTH_API_REQUEST',
+    'PRE_AUTH_API_RESPONSE_SUCCESS',
+    'PRE_AUTH_API_RESPONSE_FAILED',
+    'PRE_AUTH_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
+    'PRE_AUTH_UI_EVENT_TRANSACTION_FAILURE_SCREEN_SHOWN',
+    'CARD_PAYMENT_API_EVENT_REQ_API_3.0_PAYMENT_PREAUTH',
+    'CARD_PAYMENT_API_EVENT_RESP_API_3.0_PAYMENT_PREAUTH',
   ];
 
   // BQR payment indicators (takes priority over UPI since BQR uses UPI events)
   const bqrIndicators = [
     'BQR_UI_EVENT_BQR_QR_SCREEN_SHOWN',
+    'BHARATQR_QR_SHOWN',  // Alternative event name
     'BQR_PAY_AUTHORIZED_PAYMENT_NOTIFICATION',
     'BQR_AUTOMATE_PRINT_CHANRGESLIP',
     'BQR_print_status_check',
+    'BQR_print_receipt_button_clicked',
+    'BQR_THERMAL_PRINT_START',
     'BQR_API_EVENT_REQ_STOP_PAYMENT',
     'BQR_API_EVENT_RESP_STOP_PAYMENT',
     'BHARATQR_UI_EVENT_TRANSACTION_FAILURE_SCREEN_SHOWN',
-    'WALLET_QR_GENERATE_API',
+    'BQR_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
+    // BQR QR generation (newer format)
+    'BQR_GENERATE_API_REQUEST',
+    'BQR_GENERATE_API_RESPONSE_SUCCESS',
+    'BQR_GENERATE_API_RESPONSE_FAILED',
+    // WALLET QR generation (older format)
+    'WALLET_QR_GENERATE_API',  // Matches both REQUEST and RESPONSE_SUCCESS
+    'BQR_API_EVENT_REQ_GENERATE_QR',
+    'BQR_API_EVENT_RESP_GENERATE_QR',
     'BQR_API_EVENT_REQ_PAY_BQR_QR',
     'BQR_API_EVENT_RESP_PAY_BQR_QR',
     'BQR_API_EVENT_REQ_CHECK_STATUS',
@@ -50,11 +70,14 @@ function inferPaymentTypeFromEvents(events) {
     'UPI_UI_EVENT_UPI_CHECK_STATUS_PROGRESS_INITIATED',
     'UPI_QR_GENERATE_API_REQUEST',
     'UPI_QR_GENERATE_API_RESPONSE_SUCCESS',
+    'UPI_QR_GENERATE_API_RESPONSE_FAILED',
     'UPI_API_EVENT_REQ_CHECK_STATUS',
     'UPI_API_EVENT_RESP_CHECK_STATUS',
     'UPI_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
     'UPI_UI_EVENT_TRANSACTION_FAILURE_SCREEN_SHOWN',
     'UPI_AUTOMATE_PRINT_CHANRGESLIP',
+    'PAYMENT_STATUS_API_REQUEST',
+    'PAYMENT_STATUS_API_RESPONSE_SUCCESS',
   ];
 
   // Cash payment indicators
@@ -64,6 +87,9 @@ function inferPaymentTypeFromEvents(events) {
     'cash_network_error',
     'CASH_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
     'CASH_UI_EVENT_TRANSACTION_FAILURE_SCREEN_SHOWN',
+    'CASH_PAYMENT_API_REQUEST',
+    'CASH_PAYMENT_API_RESPONSE_SUCCESS',
+    'CASH_PAYMENT_API_RESPONSE_FAILED',
   ];
 
   // Cheque payment indicators
@@ -99,8 +125,16 @@ function inferPaymentTypeFromEvents(events) {
     'PAYLINK_SEND_SUCCESS',
     'PAYLINK_SEND_FAILED',
     'PAYLINK_PAYMENT_SUCCESS',
+    'PAYLINK_PAYMENT_FAILED',
     'PAYLINK_PAYMENT_EXPIRED',
     'PAYLINK_PAYMENT_ABORTED',
+    'PAYLINK_CREATE_API_REQUEST',
+    'PAYLINK_CREATE_API_RESPONSE_SUCCESS',
+    'PAYLINK_CREATE_API_RESPONSE_FAILED',
+    'PAYLINK_POLL_STATUS_INITIATED',
+    'PAYLINK_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
+    'PAYLINK_UI_EVENT_TRANSACTION_FAILURE_SCREEN_SHOWN',
+    'CNP_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
   ];
 
   // Wallet indicators
@@ -116,7 +150,13 @@ function inferPaymentTypeFromEvents(events) {
     'NCMC_BALANCE_LOAD',
   ];
 
-  // Check in priority order (BQR before UPI since BQR uses UPI events)
+  // Check in priority order
+  // PAYLINK before UPI/BQR since PAYLINK also uses payment status events
+  if (paylinkIndicators.some(indicator => eventNamesStr.includes(indicator))) {
+    return 'PAYLINK';
+  }
+
+  // BQR before UPI since BQR uses UPI events
   if (bqrIndicators.some(indicator => eventNamesStr.includes(indicator))) {
     return 'BQR';
   }
@@ -143,10 +183,6 @@ function inferPaymentTypeFromEvents(events) {
 
   if (emiIndicators.some(indicator => eventNamesStr.includes(indicator))) {
     return 'EMI';
-  }
-
-  if (paylinkIndicators.some(indicator => eventNamesStr.includes(indicator))) {
-    return 'PAYLINK';
   }
 
   if (walletIndicators.some(indicator => eventNamesStr.includes(indicator))) {

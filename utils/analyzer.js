@@ -11,6 +11,10 @@ const PAYMENT_PATTERNS = {
     optional: [
       'qr_generation_started',
       'qr_api_failure',
+      // Alternative UPI QR generation events (newer format)
+      'UPI_QR_GENERATE_API_REQUEST',
+      'UPI_QR_GENERATE_API_RESPONSE_SUCCESS',
+      'UPI_QR_GENERATE_API_RESPONSE_FAILED',
       'UPI_UI_EVENT_UPI_CHECK_STATUS_PROGRESS_INITIATED',
       'UPI_API_EVENT_REQ_CHECK_STATUS',
       'UPI_API_EVENT_RESP_CHECK_STATUS',
@@ -21,6 +25,8 @@ const PAYMENT_PATTERNS = {
       'UPI_API_EVENT_RESP_STOP_PAYMENT',
       'PAYMENT_PROMOS_API_REQUEST',
       'PAYMENT_PROMOS_API_RESPONSE',
+      'PAYMENT_STATUS_API_REQUEST',
+      'PAYMENT_STATUS_API_RESPONSE_SUCCESS',
     ],
     successIndicators: [
       'UPI_PAY_AUTHORIZED_PAYMENT_NOTIFICATION',
@@ -42,12 +48,17 @@ const PAYMENT_PATTERNS = {
     required: [
       'payment_initiated_upi',
       // QR must be generated - either generic or BQR-specific
-      // At least one of: qr_api_success OR WALLET_QR_GENERATE_API_RESPONSE_SUCCESS
+      // At least one of: qr_api_success OR WALLET_QR_GENERATE_API_RESPONSE_SUCCESS OR BQR_GENERATE_API_RESPONSE_SUCCESS
     ],
     optional: [
       'qr_generation_started',
       'qr_api_success',
       'qr_api_failure',
+      // BQR QR generation (newer format)
+      'BQR_GENERATE_API_REQUEST',
+      'BQR_GENERATE_API_RESPONSE_SUCCESS',
+      'BQR_GENERATE_API_RESPONSE_FAILED',
+      // WALLET QR generation (older format)
       'WALLET_QR_GENERATE_API_REQUEST',
       'WALLET_QR_GENERATE_API_RESPONSE_SUCCESS',
       'WALLET_QR_GENERATE_API_RESPONSE_FAILED',
@@ -68,13 +79,18 @@ const PAYMENT_PATTERNS = {
       'UPI_API_EVENT_RESP_STOP_PAYMENT',
       'BQR_API_EVENT_REQ_STOP_PAYMENT',
       'BQR_API_EVENT_RESP_STOP_PAYMENT',
+      // E-receipt events (post-payment)
+      'api_send_receipt_request',
+      'api_send_receipt_response',
+      'send_e_receipt_button_clicked',
+      'send_e_receipt_success',
     ],
     successIndicators: [
       'BQR_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
       'UPI_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
       'UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
       'BQR_PAY_AUTHORIZED_PAYMENT_NOTIFICATION',
-      'PAYMENT_STATUS_API_RESPONSE_SUCCESS',
+      // Removed PAYMENT_STATUS_API_RESPONSE_SUCCESS - API success doesn't mean UI shown
     ],
     failureIndicators: [
       'PAYMENT_CANCELLED',
@@ -101,8 +117,12 @@ const PAYMENT_PATTERNS = {
     optional: [
       'PREPARING_FOR_TXN',
       'TXN_IN_PROGRESS',
+      // Pre-payment events
+      'CARD_PAYMENT_SELECTED',
+      'CARD_PAYMENT_EVENT_LISTENED',
       'Card_UI_EVENT_CARD_ENTER_PIN_SCREEN_SHOWN',
       'Card_APP_EVENT_PIN_ENTERED', // MOVED FROM REQUIRED - not all cards need PIN
+      // Regular card payment events
       'CARD_PAYMENT_API_EVENT_REQ_API_3.0_PAYMENT_CARD',
       'CARD_PAYMENT_API_EVENT_RESP_API_3.0_PAYMENT_CARD',
       'CARD_PAYMENT_API_EVENT_REQ',
@@ -111,30 +131,44 @@ const PAYMENT_PATTERNS = {
       'CARD_PAYMENT_API_RESPONSE_SUCCESS',
       'PAYMENT_CONFIRM_API_REQUEST',
       'PAYMENT_CONFIRM_API_RESPONSE_SUCCESS',
+      // Pre-Auth payment events (variant of card payment)
+      'CARD_PAYMENT_API_EVENT_REQ_API_3.0_PAYMENT_PREAUTH',
+      'CARD_PAYMENT_API_EVENT_RESP_API_3.0_PAYMENT_PREAUTH',
+      'PRE_AUTH_API_REQUEST',
+      'PRE_AUTH_API_RESPONSE_SUCCESS',
+      'PRE_AUTH_API_RESPONSE_FAILED',
       // DCC (Dynamic Currency Conversion) for international cards
       'DCC_INFO_API_EVENT_REQ',
       'DCC_INFO_API_EVENT_RESP_SUCCESS',
       'DCC_INFO_API_EVENT_RESP_FAILURE',
       'DCC_OPTED',
       'DCC_NOT_OPTED',
-      // Printing
+      // Printing (regular card)
       'AUTOMATE_PRINT_CHANRGESLIP',
       'CARD_AUTOMATE_PRINT_CHANRGESLIP',
       'THERMAL_PRINT_START',
       'CARD_print_status_check',
       'CARD_print_status_check_result',
+      // Printing (pre-auth)
+      'PRE_AUTH_print_receipt_button_clicked',
+      'PRE_AUTH_print_status_check',
+      'PRE_AUTH_print_status_check_result',
+      'PRE_AUTH_THERMAL_PRINT_START',
+      'PRE_AUTH_print_status_result',
     ],
     successIndicators: [
       'CARD_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
-      'CARD_PAYMENT_API_EVENT_RESP_SUCCESS',
-      'CARD_PAYMENT_API_RESPONSE_SUCCESS',
-      'PAYMENT_CONFIRM_API_RESPONSE_SUCCESS',
+      'PRE_AUTH_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN', // Pre-auth success
+      // Removed API success events - they indicate backend success, not UI success
+      // A payment can succeed on backend but drop before showing screen to user
     ],
     failureIndicators: [
       'PAYMENT_CANCELLED',
       'CARD_UI_EVENT_TRANSACTION_FAILURE_SCREEN_SHOWN',
+      'PRE_AUTH_UI_EVENT_TRANSACTION_FAILURE_SCREEN_SHOWN', // Pre-auth failure
       'CARD_PAYMENT_API_EVENT_RESP_FAILURE',
       'CARD_PAYMENT_API_RESPONSE_FAILED',
+      'PRE_AUTH_API_RESPONSE_FAILED', // Pre-auth API failure
       'EMV_FAILURE',
     ],
   },
@@ -146,11 +180,22 @@ const PAYMENT_PATTERNS = {
     ],
     optional: [
       'cash_network_error',
+      // API events (generic)
       'API_REQUEST',
       'API_RESPONSE_SUCCESS',
       'API_RESPONSE_FAILED',
+      // Cash-specific API events
+      'CASH_PAYMENT_API_REQUEST',
+      'CASH_PAYMENT_API_RESPONSE_SUCCESS',
+      'CASH_PAYMENT_API_RESPONSE_FAILED',
+      // Printing
       'AUTOMATE_PRINT_CHANRGESLIP',
       'THERMAL_PRINT_START',
+      // E-receipt events
+      'api_send_receipt_request',
+      'api_send_receipt_response',
+      'send_e_receipt_button_clicked',
+      'send_e_receipt_success',
     ],
     successIndicators: [
       'CASH_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
@@ -192,7 +237,7 @@ const PAYMENT_PATTERNS = {
     ],
     successIndicators: [
       'DD_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
-      'API_RESPONSE_SUCCESS',
+      // Removed API_RESPONSE_SUCCESS - API success doesn't mean UI shown
     ],
     failureIndicators: [
       'DD_UI_EVENT_TRANSACTION_FAILURE_SCREEN_SHOWN',
@@ -206,26 +251,45 @@ const PAYMENT_PATTERNS = {
       'PAYLINK_SEND_INITIATED',
     ],
     optional: [
+      // Paylink creation
+      'PAYLINK_CREATE_API_REQUEST',
+      'PAYLINK_CREATE_API_RESPONSE_SUCCESS',
+      'PAYLINK_CREATE_API_RESPONSE_FAILED',
+      // Paylink sending
       'PAYLINK_SEND_SUCCESS',
       'PAYLINK_SEND_FAILED',
       'PAYLINK_INVALID_MOBILE',
       'PAYLINK_RETRY_ATTEMPTED',
+      // Paylink status
       'PAYLINK_POLL_STATUS_INITIATED',
+      'PAYLINK_PAYMENT_ABORTED',
+      'PAYMENT_STATUS_API_REQUEST',
+      'PAYMENT_STATUS_API_RESPONSE_SUCCESS',
+      // Generic events
       'PAYMENT_PROMOS_API_REQUEST',
       'PAYMENT_PROMOS_API_RESPONSE',
       'AUTOMATE_PRINT_CHANRGESLIP',
       'PAYLINK_API_EVENT_REQ_STOP_PAYMENT',
       'PAYLINK_API_EVENT_RESP_STOP_PAYMENT',
+      // Printing events
+      'PAYLINK_print_receipt_button_clicked',
+      'PAYLINK_print_status_check',
+      'PAYLINK_print_status_check_result',
+      'PAYLINK_THERMAL_PRINT_START',
+      'PAYLINK_print_status_result',
     ],
     successIndicators: [
       'PAYLINK_PAYMENT_SUCCESS',
-      'CNP_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN',
+      'PAYLINK_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN', // Primary success screen
+      'CNP_UI_EVENT_TRANSACTION_SUCCESS_SCREEN_SHOWN', // Alternative naming
     ],
     failureIndicators: [
       'PAYLINK_SEND_FAILED',
       'PAYLINK_INVALID_MOBILE',
       'PAYLINK_PAYMENT_EXPIRED',
       'PAYLINK_PAYMENT_ABORTED',
+      'PAYLINK_PAYMENT_FAILED',
+      'PAYLINK_UI_EVENT_TRANSACTION_FAILURE_SCREEN_SHOWN',
       'PAYLINK_API_EVENT_REQ_STOP_PAYMENT',
     ],
   },
